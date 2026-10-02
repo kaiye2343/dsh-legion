@@ -43,6 +43,19 @@
 
 **450 / 519 通过**（69 失败）。起点是**完全跑不起来**，现在能跑了。
 
+> ⚠️ **这个数字依赖原仓库的环境残留，不可复现。**
+> 原仓库 `node_modules/.pnpm/` 里残留着早期用 **isolated linker** 安装的 364 个条目，
+> 其中包含 `use-sync-external-store`——它是 `dsh-client-ui-renderer` 的依赖。在干净的
+> **hoisted linker** 安装下（本沙箱唯一可用的方式）该包不会提升到顶层，vitest 会在
+> 加载配置阶段直接报 `installed package use-sync-external-store was not found`，
+> **整套测试在启动阶段就停下，拿不到任何汇总数字**。
+>
+> 影响范围：`use-sync-external-store` 的唯一消费者是 `dsh-client-ui-renderer`，属于
+> **B 类（客户端测试）**，本来就跑不了。**host 面测试不受影响。**
+>
+> 含义：**要复跑那个 450/519，必须在本仓库（`dsh-legion/`）下操作**，
+> 干净拷贝的 `dsh-legion-adaptation/repo/` 复现不了这个数字。
+
 ---
 
 ## 三、当前剩余失败（已完整分类）
