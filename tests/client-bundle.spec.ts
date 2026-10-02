@@ -89,7 +89,7 @@ describe('root Client bundle artifact', () => {
   it('exports only the Settings Client surface and contains no projection/overlay literals', () => {
     const client = materialize()
     expect(client.exports.LEGION_NAMESPACE).toBe(LEGION_SETTINGS_NAMESPACE)
-    expect(client.exports.inject).toEqual(['slots', 'locale', 'settingsScope'])
+    expect(client.exports.inject).toEqual(['slots', 'locale', 'configForms'])
     expect(client.exports).not.toHaveProperty('RunReceiptOverlay')
     expect(client.exports).not.toHaveProperty('LEGION_RUN_RECEIPT_PROJECTION_KEY')
     const source = bundle()

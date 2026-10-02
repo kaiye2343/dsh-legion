@@ -24,6 +24,20 @@ export class SettingsFixture {
   }
 
   async mount(ctx: Context): Promise<void> {
+    // `SettingsForms` declares `inject: ["configEditor", "profileContext"]`, so
+    // it stays PENDING — and `ctx.get('settings')` stays undefined — unless both
+    // are already provided. A test host that only mounts the provider would
+    // otherwise hang here rather than fail informatively.
+    ctx.root.loader ??= { await: async () => undefined }
+    if (ctx.get('profileContext') === undefined) ctx.provide('profileContext', { name: 'settings-fixture' })
+    if (ctx.get('configEditor') === undefined) {
+      ctx.provide('configEditor', {
+        // `describe()` maps over this; it must be an array of entry records.
+        configuration: () => [],
+        documentPath: () => 'settings-fixture.yml',
+        prepareDocument: async () => 'settings-fixture.yml',
+      })
+    }
     const fiber = ctx.plugin(MemorySettings, this)
     await fiber
     const provider = ctx.get('settings')
