@@ -8,7 +8,7 @@ import {
 } from '@deepseek-ai/dsh-api-gateway/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import { SlotTestRuntime, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
+import { SlotTestRuntime, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ReceiptFeedFrame, ReceiptSessionModel, RunReceipt } from '../src/types.ts'
 import { receipt, runId, settle } from './fixtures.ts'
 import { apply, inject } from '../src/client/index.ts'
@@ -260,9 +260,35 @@ interface Bench {
   readonly script: FollowScript
   readonly remote: ScriptedRemote
   readonly view: ReturnType<SlotTestRuntime['renderSlot']>
-  readonly conversation: ReturnType<SlotTestRuntime['renderSlot']>
   readonly receiptFeature: Awaited<ReturnType<SlotTestRuntime['mount']>>
 }
+
+/**
+ * Main-Session selection double.
+ *
+ * DSH 0.2 moved main-Session navigation out of the Session Controller list to
+ * the UI view owner, which publishes it as the `uiSession` adapter's `current`
+ * binding. The feed reads the selection through that binding's scope `key`.
+ */
+function createCurrentSelection(): {
+  readonly current: { getSnapshot(): { key: string | undefined }; subscribe(l: () => void): () => void }
+  setCurrent(id: string | undefined): void
+} {
+  let key: string | undefined
+  const listeners = new Set<() => void>()
+  return {
+    current: {
+      getSnapshot: () => ({ key }),
+      subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
+    },
+    setCurrent(next) {
+      key = next
+      for (const listener of [...listeners]) listener()
+    },
+  }
+}
+
+const currentSelection = createCurrentSelection()
 
 async function bench(
   options: { incompatible?: boolean; missingNamespace?: boolean; malformedNamespace?: boolean; otherOverlay?: boolean } = {},
@@ -270,25 +296,23 @@ async function bench(
   localStorage.clear()
   const runtime = await SlotTestRuntime.create()
   await runtime.sessions.add({ id: 'session-a' })
-  await runtime.sessions.add({ id: 'session-b' }, { current: false })
+  await runtime.sessions.add({ id: 'session-b' })
   const locale = new TestLocale()
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   const script = new FollowScript()
   const remote = new ScriptedRemote(script, options)
   runtime.ctx.provide('remote', remote)
-  const settings = stubSettingsScope<Record<string, unknown>>()
+  const settings = stubConfigForm<Record<string, unknown>>()
   settings.publish({
     status: 'ready', value: {}, base: {}, user: {}, revision: 1, writable: true, mode: 'host',
   })
-  runtime.ctx.provide('settingsScope', { bind: () => settings.scope })
+  runtime.ctx.provide('configForms', { get: () => settings.scope })
+  runtime.ctx.provide('uiSession', { adapter: { current: currentSelection } })
   await runtime.declare({
     'shell.overlay': { kind: 'list', scope: 'root' },
-    conversation: { kind: 'single', scope: 'session-maybe' },
-    'settings.plugin.item': { kind: 'keyed', scope: 'root' },
+    'settings.plugins.tab': { kind: 'list', scope: 'root' },
   })
-  runtime.slots.register({ name: 'conversation' }, () =>
-    createElement('button', { type: 'button', onClick: () => { document.body.dataset.conversationClicked = 'yes' } }, 'Conversation control'))
   if (options.otherOverlay === true) {
     runtime.slots.register({ name: 'shell.overlay', id: 'other-overlay', order: 10 }, () =>
       createElement('button', { type: 'button', onClick: () => { document.body.dataset.otherClicked = 'yes' } }, 'Other control'))
@@ -296,8 +320,7 @@ async function bench(
   await runtime.mount({ inject: [...settingsInject], apply: applySettings })
   const receiptFeature = await runtime.mount({ inject: [...inject], apply: apply as (ctx: Context) => unknown })
   const view = runtime.renderSlot('shell.overlay', {})
-  const conversation = runtime.renderSlot('conversation', {})
-  return { runtime, locale, script, remote, view, conversation, receiptFeature }
+  return { runtime, locale, script, remote, view, receiptFeature }
 }
 
 async function show(channel: FollowChannel, frame: ReceiptFeedFrame, runtime: SlotTestRuntime): Promise<void> {
@@ -360,10 +383,10 @@ describe('Run Receipt companion Client', () => {
 
     let releaseFirstA!: () => void
     firstA.holdClose(new Promise(resolve => { releaseFirstA = resolve }))
-    await b.runtime.sessions.setCurrent('session-b')
+    await currentSelection.setCurrent('session-b')
     expect(b.view.container.querySelector('[data-receipt-state="opening"]')).not.toBeNull()
     void firstA.push(replacement('session-a', 2, [receipt('session-a', 2, 1)]))
-    await b.runtime.sessions.setCurrent('session-a')
+    await currentSelection.setCurrent('session-a')
     expect(b.view.container.textContent).not.toContain(runId(2))
 
     releaseFirstA()
@@ -529,9 +552,7 @@ describe('Run Receipt companion Client', () => {
       const b = await trackedBench(options)
       expect(b.view.container.querySelector('[data-receipt-state="feed-unavailable"]')).not.toBeNull()
       expect(b.view.container.textContent).toContain('Run Receipt feed is unavailable')
-      expect(b.runtime.slots.entries('settings.plugin.item').some(entry => entry.options.key === 'legion')).toBe(true)
-      b.conversation.view.getByRole('button', { name: 'Conversation control' }).click()
-      expect(document.body.dataset.conversationClicked).toBe('yes')
+      expect(b.runtime.slots.entries('settings.plugins.tab').some(entry => entry.options.id === 'legion')).toBe(true)
       await b.runtime.dispose()
       benches.splice(benches.indexOf(b.runtime), 1)
     }
@@ -549,9 +570,7 @@ describe('Run Receipt companion Client', () => {
     const stream = await b.script.nextOpen('session-a')
     await show(stream, baseline('session-a', 1, [receipt('session-a', 1, 1)]), b.runtime)
     b.view.view.getByRole('button', { name: 'Other control' }).click()
-    b.conversation.view.getByRole('button', { name: 'Conversation control' }).click()
     expect(document.body.dataset.otherClicked).toBe('yes')
-    expect(document.body.dataset.conversationClicked).toBe('yes')
     b.view.view.getByRole('button', { name: 'Dock Run Receipt' }).click()
     const persisted = Array.from({ length: localStorage.length }, (_, index) =>
       localStorage.getItem(localStorage.key(index) ?? '') ?? '').join('\n')

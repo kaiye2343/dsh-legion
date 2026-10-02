@@ -20,10 +20,16 @@
  * DSH ships an equivalent model for its own cards, but a client bundle may not
  * import another plugin's values, so this is Legion's own. It mirrors the
  * semantics of `CardForm` in `@deepseek-ai/dsh-client-ui-settings-plugins` as
- * of DSH 0.1.0-rc.8.
+ * of DSH 0.2.0-rc.2.
+ *
+ * DSH 0.2 replaced the bound `SettingsScope` with the `ctx.configForms`
+ * service: a form is now addressed by its Host plugin ENTRY ID rather than
+ * bound to a namespace from the consumer side, and the same
+ * `getSnapshot`/`subscribe`/`set`/`unset`/`mutate` contract is carried by
+ * `ConfigForm`.
  */
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 
 /** The write one staged field performs when the card is saved. */
 export type FieldWrite =
@@ -165,10 +171,10 @@ export class SettingsForm<Section> {
   private failed = false
 
   /**
-   * @param scope - the bound settings scope for this card's namespace.
+   * @param scope - the `ctx.configForms` entry form for this card's namespace.
    * @param specs - the section fields this card edits.
    */
-  constructor(private readonly scope: SettingsScope<Section>, specs: readonly FieldSpec[]) {
+  constructor(private readonly scope: ConfigForm<Section>, specs: readonly FieldSpec[]) {
     this.specs = new Map(specs.map(spec => [spec.field, spec]))
     scope.subscribe(() => { this.publish() })
   }

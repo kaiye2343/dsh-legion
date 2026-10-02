@@ -74,7 +74,7 @@ describe('real DSH continuation manager integration', () => {
         defaultProfile: 'deep',
       })
       ctx.llm.registerAdapter(['mock'], new TextAdapter())
-      const parent = ctx.agentLoop.create(SessionId('legion-real-parent'), {
+      const parent = await ctx.agentLoop.create(SessionId('legion-real-parent'), {
         provider: 'mock',
         model: 'parent-model',
       })

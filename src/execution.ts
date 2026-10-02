@@ -239,7 +239,7 @@ function renderPrompt(
   ].join('\n')
 }
 
-function contentText(output: ContentBlock[]): string {
+function contentText(output: readonly ContentBlock[]): string {
   return output
     .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
     .map(block => block.text)

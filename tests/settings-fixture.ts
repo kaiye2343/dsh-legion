@@ -1,6 +1,16 @@
 import type { Context } from '@deepseek-ai/cordis'
-import SettingsProvider, { type SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import SettingsForms, { type SettingsNamespace } from '@deepseek-ai/dsh-settings'
 
+/**
+ * In-memory `ctx.settings` stand-in for the DSH 0.2.0 settings seam.
+ *
+ * DSH 0.2 replaced the old `SettingsProvider` base (which exposed
+ * `load`/`persist`/`publish` hooks) with `SettingsForms`, a profile-patch backed
+ * service. The fixture keeps the observable surface Legion's tests rely on —
+ * `describe()`, `update()`, `replace()`, `mutate()` and external document
+ * commits — while holding the document in memory instead of writing the real
+ * profile patch.
+ */
 export class SettingsFixture {
   private document: Record<string, unknown>
   private provider: MemorySettings | undefined
@@ -50,32 +60,19 @@ export class SettingsFixture {
   }
 }
 
-class MemorySettings extends SettingsProvider {
-  readonly writable = true
-  private missed = false
-
+class MemorySettings extends SettingsForms {
   constructor(ctx: Context, private readonly fixture: SettingsFixture) {
     super(ctx)
   }
 
-  protected load(): Promise<Record<string, unknown>> {
-    return Promise.resolve(this.fixture.load())
-  }
-
-  protected persist(namespace: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
-    this.fixture.persist(namespace, section)
-    return Promise.resolve()
-  }
-
-  override get<const Namespace extends string>(namespace: Namespace): unknown {
-    if (this.fixture.missFirstGet && !this.missed) {
-      this.missed = true
-      return undefined
-    }
-    return super.get(namespace as never)
+  /** 0.2 keeps form policy on the service; the fixture is always editable. */
+  override get writable(): boolean {
+    return true
   }
 
   pushExternal(document: Record<string, unknown>): void {
-    this.publish(structuredClone(document))
+    for (const [namespace, section] of Object.entries(document)) {
+      this.fixture.persist(namespace as SettingsNamespace, section as Record<string, unknown>)
+    }
   }
 }

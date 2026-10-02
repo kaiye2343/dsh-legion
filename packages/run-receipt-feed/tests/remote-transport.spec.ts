@@ -98,6 +98,8 @@ describe('RunReceiptFeed generated Remote and Gateway integration', () => {
     const stream = await ctx.typertGateway.wireStream.open(
       'legionReceipts/follow',
       { args: { sessionId: String(session.id) } },
+      (async function* () {})(),
+      undefined,
       abort.signal,
     )
     const iterator = stream[Symbol.asyncIterator]()

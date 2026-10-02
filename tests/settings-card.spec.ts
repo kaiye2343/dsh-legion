@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
+import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { LegionCard, type LegionCardProps } from '../src/client/LegionCard.ts'
 import {
   LegionCardController, type LegionCardSection,
@@ -12,7 +12,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
 }))
 
 function readyScope(section: LegionCardSection, base: LegionCardSection = {}) {
-  const stub = stubSettingsScope<LegionCardSection>()
+  const stub = stubConfigForm<LegionCardSection>()
   stub.publish({
     status: 'ready', value: { ...base, ...section }, base: { ...base }, user: { ...section },
     revision: 1, writable: true, mode: 'host',
@@ -36,7 +36,7 @@ function records(value: unknown): Record<string, unknown>[] {
 describe('Legion Settings card canonical vocabulary', () => {
   it('loads legacy defaultProfile and saves only canonical defaultSpecialist', async () => {
     const stub = readyScope({ defaultProfile: 'quick' })
-    const accepted = Promise.withResolvers<void>()
+    const accepted = Promise.withResolvers<boolean>()
     stub.mutate.mockReturnValue(accepted.promise)
     const face = new LegionCardController(stub.scope).inject()
 
@@ -76,7 +76,7 @@ describe('Legion Settings card canonical vocabulary', () => {
     expect(face.hooks.legionCard.getSnapshot()).toMatchObject({
       dirty: false, saving: true, failed: false,
     })
-    accepted.resolve()
+    accepted.resolve(true)
     await settle()
 
     expect(stub.scope.getSnapshot().user).toEqual({ defaultSpecialist: 'quick' })
@@ -84,7 +84,7 @@ describe('Legion Settings card canonical vocabulary', () => {
   })
 
   it('keeps a staged draft when the Host does not publish acceptance', async () => {
-    const stub = stubSettingsScope<LegionCardSection>()
+    const stub = stubConfigForm<LegionCardSection>()
     stub.publish({
       status: 'ready', value: { toolName: 'legion' }, base: {}, user: {},
       revision: 1, writable: true, mode: 'host',

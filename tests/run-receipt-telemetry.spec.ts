@@ -114,6 +114,7 @@ function assistantUsage(session: Session, turn: number, step: number, usage: Tok
       content: [{ type: 'text', text: 'done' }],
       source: { kind: 'model', provider: 'test-provider', model: 'test-model' },
     },
+    stream: [],
     usage,
   }, { surfaceOp: 'append' })
 }
@@ -130,19 +131,6 @@ function appendRetryTurn(session: Session): void {
   const turn = 1
   session.append('turn/start', { turn })
   session.append('step/start', { turn, step: 1 })
-  session.append('assistant/chunk', {
-    turn,
-    step: 1,
-    chunk: {
-      type: 'usage',
-      usage: { inputTokens: 10, outputTokens: 2, totalTokens: 15, cacheReadTokens: 3, cacheWriteTokens: 0 },
-    },
-  })
-  session.append('assistant/chunk', {
-    turn,
-    step: 1,
-    chunk: { type: 'finish', reason: { kind: 'error', failure: { code: 'TEST', message: 'retry' } } },
-  })
   session.append('llm/retry', { turn, step: 1, failure: { code: 'TEST', message: 'retry' } } as never)
   session.append('llm/retry-started', { turn, step: 1, retry: 1 } as never)
   assistantUsage(session, turn, 1, {

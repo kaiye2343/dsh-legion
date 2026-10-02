@@ -15,7 +15,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 // Module scope: the loader claims plugin styles as soon as this factory
 // returns, so the tag must exist by then.
@@ -41,7 +41,7 @@ export const LEGION_NAMESPACE = 'legion'
 export const LEGION_LOCALE_NS = 'settings.legion'
 
 /** The slot the plugin configuration tab dispatches one card per namespace into. */
-export const LEGION_CARD_SLOT = 'settings.plugin.item'
+export const LEGION_CARD_SLOT = 'settings.plugins.tab'
 
 /**
  * The range the Host schema accepts for `maxResourceBytes`, mirrored so the
@@ -75,8 +75,8 @@ export class LegionCardController {
    */
   private open = false
 
-  /** @param scope - the bound settings scope for the `legion` namespace. */
-  constructor(scope: SettingsScope<LegionCardSection>) {
+  /** @param scope - the `ctx.configForms` entry form for the `legion` namespace. */
+  constructor(scope: ConfigForm<LegionCardSection>) {
     this.form = new SettingsForm(scope, [
       textField('toolName'),
       textField('defaultSpecialist', ['defaultProfile']),
@@ -117,7 +117,14 @@ export class LegionCardController {
 }
 
 /** Required browser services. */
-export const inject = ['slots', 'locale', 'settingsScope']
+export const inject = ['slots', 'locale', 'configForms']
+
+/**
+ * Host Loader entry id whose config carries the `legion` namespace.
+ * DSH 0.2 addresses a settings form by Host entry id (`ctx.configForms.get`),
+ * replacing the 0.1 bound `SettingsScope` that was keyed on the namespace.
+ */
+export const LEGION_HOST_ENTRY_ID = 'legion-settings'
 
 /**
  * Mount Legion's settings card.
@@ -125,14 +132,15 @@ export const inject = ['slots', 'locale', 'settingsScope']
  */
 export function apply(ctx: Context): void {
   const controller = new LegionCardController(
-    ctx.settingsScope.bind<LegionCardSection>({ namespace: LEGION_NAMESPACE }),
+    ctx.configForms.get<LegionCardSection>(LEGION_HOST_ENTRY_ID),
   )
   ctx.effect(() => ctx.locale.register(LEGION_LOCALE_NS, { en, zh }), 'dsh-legion: card dictionaries')
   // inject() defers registration until the tab declares the slot, so this half
   // does not need the tab to exist yet — or ever.
   ctx.slots.inject(LEGION_CARD_SLOT, () => ctx.slots.register({
     name: LEGION_CARD_SLOT,
-    key: LEGION_NAMESPACE,
+    id: LEGION_NAMESPACE,
+    label: () => en.title,
     locale: LEGION_LOCALE_NS,
     inject: () => controller.inject(),
   }, LegionCard))

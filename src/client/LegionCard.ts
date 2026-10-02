@@ -21,7 +21,7 @@
  */
 import { createElement as h, type ReactNode } from 'react'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconChevronDownOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { FieldState, FormActions, FormShell } from './settings-form.ts'
 
@@ -48,7 +48,7 @@ export interface LegionCardFace extends FormActions {
 
 /** Props the slot renderer composes from the published slot contracts. */
 export type LegionCardProps =
-  PropsRuntime<'settings.plugin.item'>
+  PropsRuntime<'settings.plugins.tab'>
   & PropsLocale<'settings.legion'>
   & InjectFace<LegionCardFace>
 
@@ -209,7 +209,7 @@ export function LegionCard(props: LegionCardProps): ReactNode {
     ]),
     // Carried on the header so a collapsed card still says it holds edits.
     state.dirty ? h('span', { className: 'dsh-legion-card__pending', key: 'pending' }, t('unsaved')) : null,
-    h(IconChevronDownOutline14, {
+    h(IconChevronDownOutlineMedium, {
       key: 'chevron',
       className: state.open ? 'dsh-legion-card__chevron--open' : 'dsh-legion-card__chevron',
     }),

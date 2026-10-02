@@ -66,7 +66,7 @@ function stopReasonSentence(result: SubagentResult): string | undefined {
   }
 }
 
-function textOf(output: ContentBlock[]): string {
+function textOf(output: readonly ContentBlock[]): string {
   return output
     .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
     .map(block => block.text)

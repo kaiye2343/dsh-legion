@@ -5,7 +5,6 @@ import {
   isRemoteFailure,
   type ClientRemote,
 } from '@deepseek-ai/dsh-api-gateway/client'
-import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { RemoteError, type TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 import {
@@ -19,6 +18,22 @@ import {
 
 export type ReceiptRemote = Pick<ClientRemote, '$stream'> & {
   readonly legionReceipts: TypertClientRemote['legionReceipts']
+}
+
+/**
+ * The current main Session identity, as the UI view owner publishes it.
+ *
+ * DSH 0.2 moved main-Session navigation out of the Session Controller list —
+ * `SessionListState` now carries only catalog facts (`ids`, `byId`, `phase`,
+ * `projectionsBySession`) and its own contract states "navigation belongs to
+ * view owners". The Receipt feed therefore takes the selection as an injected
+ * source rather than reading it off the controller list.
+ */
+export interface CurrentSessionSource {
+  /** @returns the current main Session id, or undefined when none is selected. */
+  getSnapshot(): string | undefined
+  /** Observe selection replacements. @returns the disposer removing the listener. */
+  subscribe(listener: () => void): () => void
 }
 
 type ReceiptStateStream = RemoteSnapshotStream<ReceiptFeedBaseline, ReceiptFeedReplacement>
@@ -111,11 +126,11 @@ export class ClientReceiptModel {
   private disposed = false
 
   constructor(
-    private readonly sessions: Pick<ISessions, 'list'>,
+    private readonly currentSession: CurrentSessionSource,
     private readonly remote: ReceiptRemote | undefined,
     unavailableReason?: string,
   ) {
-    const sessionId = sessions.list.getSnapshot().current
+    const sessionId = currentSession.getSnapshot()
     this.targetSessionId = sessionId === undefined ? undefined : String(sessionId)
     this.store = createSnapshotStore<ClientReceiptSnapshot>({
       sessionId: this.targetSessionId,
@@ -124,10 +139,9 @@ export class ClientReceiptModel {
       directClear: false,
       diagnostic: remote === undefined ? unavailableReason ?? 'remote namespace unavailable' : undefined,
     })
-    this.unsubscribe = sessions.list.subscribe(() => { this.followCurrent() })
+    this.unsubscribe = currentSession.subscribe(() => { this.followCurrent() })
     if (remote !== undefined) this.schedule(this.targetSessionId)
   }
-
   /** Stop Session observation and await the active stream consumer. */
   async dispose(): Promise<void> {
     if (this.disposed) return
@@ -144,7 +158,7 @@ export class ClientReceiptModel {
 
   private followCurrent(): void {
     if (this.disposed) return
-    const current = this.sessions.list.getSnapshot().current
+    const current = this.currentSession.getSnapshot()
     const sessionId = current === undefined ? undefined : String(current)
     if (sessionId === this.targetSessionId) return
     this.targetSessionId = sessionId

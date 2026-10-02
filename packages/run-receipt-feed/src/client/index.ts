@@ -8,7 +8,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import receiptsRemote from 'dsh-legion-receipts/remote'
 import './styles.ts'
-import { ClientReceiptModel, type ReceiptRemote } from './model.ts'
+import { ClientReceiptModel, type CurrentSessionSource, type ReceiptRemote } from './model.ts'
 import {
   createReceiptPresentationStore,
   RUN_RECEIPT_OVERLAY_ID,
@@ -29,7 +29,7 @@ export type { ReceiptPresentationState, RunReceiptOverlayProps } from './RunRece
 export { en, RECEIPT_LOCALE_NS, zh } from './locales.ts'
 
 /** The Gateway-owned Client Remote service must exist before self-mount. */
-export const inject = ['remote']
+export const inject = ['remote', 'uiSession']
 
 function isReceiptRemote(value: unknown): value is ReceiptRemote {
   if (typeof value !== 'object' || value === null || typeof Reflect.get(value, '$stream') !== 'function') return false
@@ -37,10 +37,26 @@ function isReceiptRemote(value: unknown): value is ReceiptRemote {
   return typeof namespace === 'object' && namespace !== null && typeof Reflect.get(namespace, 'follow') === 'function'
 }
 
+/**
+ * Adapt the UI Session adapter's main binding to the Receipt feed's selection
+ * source.
+ *
+ * DSH 0.2 keeps main-Session navigation with the view owner: the adapter's
+ * `current` binding carries the selected Session as its scope `key`, which is
+ * undefined when no Session is selected.
+ */
+function currentSessionSource(ctx: Context): CurrentSessionSource {
+  const current = ctx.uiSession.adapter.current
+  return {
+    getSnapshot: () => current.getSnapshot().key,
+    subscribe: listener => current.subscribe(listener),
+  }
+}
+
 function registerUi(ctx: Context, unavailableReason?: string): () => Promise<void> {
   const remote = unavailableReason === undefined && isReceiptRemote(ctx.remote) ? ctx.remote : undefined
   const model = new ClientReceiptModel(
-    ctx.sessions,
+    currentSessionSource(ctx),
     remote,
     unavailableReason ?? (remote === undefined ? 'Run Receipt Remote namespace is unavailable' : undefined),
   )

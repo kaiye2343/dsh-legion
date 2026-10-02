@@ -84,9 +84,23 @@ export interface SettingsDescriptorLike {
   readonly user?: Record<string, unknown>
 }
 
-/** The subset of the Host settings provider Legion calls. */
+/**
+ * The subset of the Host settings service Legion calls.
+ *
+ * DSH 0.1.x exposed `register(namespace, schema)` on the settings provider, so a
+ * plugin could contribute a namespace at runtime. DSH 0.2.0 replaced that with
+ * `SettingsForms`, where a namespace is declared by a Loader entry's schema and
+ * the service exposes only read/write surfaces (`describe`, `update`, `replace`,
+ * `mutate`) — there is no `register` at all.
+ *
+ * Everything is therefore optional: Legion consumes whichever upstream half
+ * exists, and degrades to "no namespace served" rather than throwing when the
+ * Host offers no registration seam. `describe` is what the consumer half needs,
+ * so live reconfiguration still works on 0.2.0 for a namespace the Host itself
+ * declared.
+ */
 export interface SettingsProviderLike {
-  register<Value>(
+  register?<Value>(
     namespace: string,
     schema: unknown,
     options?: SettingsRegisterOptionsLike<Value>,
@@ -269,8 +283,16 @@ function registerOwnedSection<Value>(
   hooks: SettingsSectionHooks<Value>,
 ): void {
   let scope: SettingsScopeLike<Value>
+  type Register = NonNullable<SettingsProviderLike['register']>
+  const register = provider.register as Register | undefined
+  if (register === undefined) {
+    // Unreachable through the guarded callers, but stated once here so the type
+    // is narrowed without a cast and the row degrades instead of throwing.
+    consumeServedSection(ctx, scoped, provider, namespace, schema, entry, hooks)
+    return
+  }
   try {
-    scope = provider.register<Value>(namespace, schema, {
+    scope = register<Value>(namespace, schema, {
       base: entry,
       ...hooks.validate === undefined ? {} : { validate: hooks.validate },
     })
@@ -384,6 +406,13 @@ export function installSettingsSection<Value>(
     // logged diagnostic rather than to a row that silently reads nothing.
     const served = provider.get?.(namespace) !== undefined && typeof provider.describe === 'function'
     if (!served) {
+      // A Host with no registration seam cannot be asked to own the namespace;
+      // the consumer falls through to the composition entry, which is exactly
+      // the documented no-settings-provider behaviour.
+      if (typeof provider.register !== 'function') {
+        consumeServedSection(ctx, scoped, provider, namespace, schema, entry, hooks)
+        return
+      }
       registerOwnedSection(ctx, scoped, provider, namespace, schema, entry, hooks)
       return
     }
@@ -420,6 +449,17 @@ export function registerSettingsNamespace<Value>(
   const attached = ctx.inject?.([LEGION_SETTINGS_SERVICE_KEY], (scoped) => {
     const provider = scoped.get?.(LEGION_SETTINGS_SERVICE_KEY) as SettingsProviderLike | undefined
     if (provider === undefined) return
+    // DSH 0.2.0's `SettingsForms` carries no registration seam: a namespace is
+    // declared by the Loader entry's schema, not announced at runtime. A Host
+    // that offers none simply has no namespace for this row to own, which is not
+    // a Legion fault — report it and keep the row alive.
+    if (typeof provider.register !== 'function') {
+      hooks.onError?.(new Error(
+        'dsh-legion: this DSH settings service exposes no `register`, so the "'
+        + `${namespace}" namespace is declared by its Loader entry schema instead`,
+      ))
+      return
+    }
     try {
       provider.register<Value>(namespace, schema, {
         base,
