@@ -34,10 +34,12 @@ describe('published package contract', () => {
     const patch = load(await readFile(patchPath, 'utf8'), { schema: entryListSchema })
     // The exact Settings row stays service-free; the companion owns its Host
     // service in a separate Loader row. Neither belongs on the Agent tool plane.
+    // The Settings row id IS the namespace DSH 0.2 serves (it derives one from
+    // `entry.options.id`), so it must equal the client card's namespace.
     expect(patch).toEqual([
       {
         insert: [
-          { id: 'legion-settings', name: 'dsh-legion', config: { role: 'settings', specialists: {} } },
+          { id: 'legion', name: 'dsh-legion', config: { role: 'settings', specialists: {} } },
           { id: 'legion-receipts', name: 'dsh-legion-receipts' },
         ],
       },

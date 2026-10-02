@@ -33,11 +33,19 @@
 # `specialists` map is the schema formality that says the same thing — a Legion
 # row must name its Specialists, and this one has none to name.
 #
+# NOTE (DSH 0.2.0): the namespace a settings row serves is its LOADER ENTRY ID,
+# not a name the plugin announces — `SettingsForms` derives it as
+# `entry.options.id` and takes the schema from that mount's own exported
+# `Config`. The row id is therefore load-bearing: it must equal the namespace
+# the client card reads (`LEGION_NAMESPACE` in `src/client/index.ts`). On 0.1.x
+# the id was free because the plugin registered the namespace by name at
+# runtime; that seam no longer exists, so the id IS the namespace now.
+#
 # Configure Legion on the delegation row in your Agent Preset. Every delegation
 # row layers the stored user section over its own entry, so what this row serves
 # is edited once and applies wherever Legion is composed.
 - insert:
-    - id: legion-settings
+    - id: legion
       name: dsh-legion
       config:
         role: settings

@@ -33,6 +33,7 @@ class VerifyAdapter extends LlmAdapter {
     return [
       { id: 'hy4-preview-f', name: 'Hy4 preview', contextWindow: 1000000, maxTokens: 64000 },
       { id: 'deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', contextWindow: 1000000, maxTokens: 128000 },
+      { id: 'glm-5.3', name: 'GLM 5.3', contextWindow: 200000, maxTokens: 32000 },
     ]
   }
   async resolveModel(provider, model) {
@@ -113,6 +114,15 @@ try {
         maxDepth: 1,
         defaultRunInBackground: false,
         result: 'text',
+      },
+      review: {
+        description: 'Independent review over a read-only tool set.',
+        subagentProvider: 'spawn',
+        agentOptions: { provider: 'workbuddy-global', model: 'glm-5.3' },
+        toolFilter: { allow: ['read', 'glob', 'grep'] },
+        maxDepth: 1,
+        defaultRunInBackground: false,
+        result: 'review-v1',
       },
     },
   })
@@ -201,6 +211,15 @@ if (mounted) {
         defaultRunInBackground: false,
         result: 'text',
       },
+      review: {
+        description: 'Independent review.',
+        subagentProvider: 'spawn',
+        agentOptions: { provider: 'workbuddy-global', model: 'glm-5.3' },
+        toolFilter: { allow: ['read', 'glob', 'grep'] },
+        maxDepth: 1,
+        defaultRunInBackground: false,
+        result: 'review-v1',
+      },
     },
   }
   const current = legion.materializeCurrentConfigWithDiagnostics(cfg)
@@ -220,9 +239,10 @@ if (mounted) {
     legion.EMPTY_RESOURCE_SNAPSHOT,
   )
   const active = Object.keys(catalog.activeSpecialists ?? {})
-  check('both Specialists compile to an active catalog', () => {
-    assert.ok(active.includes('quick'), `active: ${active.join(', ') || '(none)'}`)
-    assert.ok(active.includes('deep'), `active: ${active.join(', ') || '(none)'}`)
+  check('all three Specialists compile to an active catalog', () => {
+    for (const role of ['quick', 'deep', 'review']) {
+      assert.ok(active.includes(role), `${role} missing — active: ${active.join(', ') || '(none)'}`)
+    }
   })
 
   // ---- 5. per-role model routing is preserved in the compiled policy ----
@@ -238,8 +258,17 @@ if (mounted) {
   check('deep resolves to the capable route', () => {
     assert.equal(routesOf('deep'), 'workbuddy-global/deepseek-v4.1-flash')
   })
-  check('the two roles carry different models (Lead can steer by role)', () => {
-    assert.notEqual(routesOf('quick'), routesOf('deep'))
+  check('review resolves to its own route', () => {
+    assert.equal(routesOf('review'), 'workbuddy-global/glm-5.3')
+  })
+  check('the three roles carry three distinct models (Lead can steer cost by role)', () => {
+    const routes = ['quick', 'deep', 'review'].map(routesOf)
+    assert.equal(new Set(routes).size, 3, `routes: ${routes.join(' | ')}`)
+  })
+  check('review keeps its read-only tool policy', () => {
+    const entry = catalog.activeSpecialists?.review
+    const filter = entry?.toolFilter ?? entry?.specialist?.toolFilter
+    assert.deepEqual(filter?.allow, ['read', 'glob', 'grep'])
   })
 }
 

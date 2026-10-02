@@ -23,7 +23,7 @@ Each row is a real signature change verified against the installed packages (not
 | --- | --- | --- | --- | --- |
 | 1 | schemastery | any `^3.18.2` | `~3.18.4` — adds the `Volatile<>` output wrapper, so a schema no longer assigns to its own inferred type | `package.json` |
 | 2 | `dsh-settings` class | `SettingsProvider` | `SettingsForms`; `writable` became a getter; `load`/`persist`/`publish` are gone | `tests/settings-fixture.ts` |
-| 3 | Settings namespace | `provider.register(ns, schema, …)` at runtime | **no `register()` on the service at all**; a namespace is declared by a Loader entry's schema | `src/settings.ts` |
+| 3 | Settings namespace | plugin called `provider.register(ns, schema)` at runtime | **no `register()` on the service**; the Host derives the namespace as `entry.options.id` and takes the schema from that mount's exported `Config` | `src/settings.ts`, `cordis.patch.yml` |
 | 4 | Client settings form | `ctx.settingsScope.bind({ namespace })` | `ctx.configForms.get(entryId)`, addressed by Host Loader entry id | `src/client/index.ts` |
 | 5 | Settings scope type | `SettingsScope<T>` | `ConfigForm<T>` (− `ConfigFormSnapshot` for the type-only import) | `src/client/settings-form.ts` |
 | 6 | Plugins slot | `'settings.plugin.item'` (keyed) | `'settings.plugins.tab'` (list), `key` → `id`, and `label` is now required | `src/client/index.ts` |
@@ -67,6 +67,7 @@ node scripts/verify-public-contract.mjs                              # verified
 
 # runtime adaptation check on a real Cordis context
 node scripts/verify-adaptation.mjs                                   # all checks passed
+node scripts/verify-settings-namespace.mjs                           # all checks passed
 ```
 
 `scripts/verify-adaptation.mjs` mounts the built plugin on a live Cordis context
@@ -78,27 +79,55 @@ alongside the real `dsh-tools`, `dsh-subagent`, `dsh-subagent-spawn-in-process`,
 2. the plugin applies without throwing;
 3. the `role: settings` row mounts, the missing `register` seam is detected, and
    the gap is reported rather than swallowed;
-4. both Specialists compile into an **active** catalog against the live subagent
-   registry (`activeSpecialists = ["quick", "deep"]`);
+4. all three Specialists compile into an **active** catalog against the live
+   subagent registry;
 5. each role keeps its own model route — `quick` →
-   `workbuddy-global/hy4-preview-f`, `deep` → `workbuddy-global/deepseek-v4.1-flash` —
-   and the two differ, so a Lead steers cost by role.
+   `workbuddy-global/hy4-preview-f`, `deep` →
+   `workbuddy-global/deepseek-v4.1-flash`, `review` → `workbuddy-global/glm-5.3` —
+   with three distinct routes, so a Lead steers cost by role; `review` also keeps
+   its read-only tool allowlist.
+
+`scripts/verify-settings-namespace.mjs` reproduces the derivation `SettingsForms`
+performs (`entry.options.id` + `fiber.runtime.Config`) against the real service,
+and asserts the row id in `cordis.patch.yml` matches the entry id the client
+card looks up.
 
 ### What works on 0.2.0-rc.2
 
 - Plugin loads and mounts; no profile-boot breakage.
-- Specialist catalog compiles; per-role model routing is preserved end to end.
+- Specialist catalog compiles; per-role model routing is preserved end to end
+  for all three roles (`quick`, `deep`, `review`).
 - Bounded delegation, cohorts, and ephemeral strategies keep their upstream
   semantics.
 - The client bundle builds and its settings form is migrated to `ConfigForm`.
+- The `legion` settings namespace is served: on 0.2 the namespace key is the
+  Loader entry id, so the bundle patch's Settings row was renamed from
+  `legion-settings` to `legion` to match what the client card reads.
+
+### The settings namespace, precisely
+
+DSH 0.2's `SettingsForms` derives a namespace as
+`entry.options.id` → schema `entry.fiber.runtime.Config`:
+
+```js
+this.revisions.set(entry.id, { ns: entry.options.id, ... })
+const schema = entry.fiber?.runtime?.Config
+```
+
+So the 0.1.x runtime `register()` call was **never what made the card appear** on
+0.2 — the row id is. Two consequences were applied:
+
+- `cordis.patch.yml`: the Settings row id became `legion`, because the id *is*
+  the namespace now and the client card reads `LEGION_NAMESPACE`.
+- `src/client/index.ts`: `LEGION_HOST_ENTRY_ID` is defined as
+  `LEGION_NAMESPACE` rather than restated, so the two halves cannot drift.
+
+`src/settings.ts` still tolerates a Host without `register`: it reports the gap
+and falls through to the composition entry, which is what keeps a 0.1.x Host and
+a 0.2.x Host on the same code path.
 
 ## Known gaps
 
-- **The settings CARD is not served on 0.2.0.** `SettingsForms` exposes no
-  `register`, so Legion cannot announce the `legion` namespace at runtime; on
-  0.2.0 a namespace is declared by a Loader entry schema. The seam now detects
-  this, logs it, and degrades — delegation is unaffected. Closing it needs the
-  namespace to move into the bundle patch's Loader entry schema.
 - The unit suite cannot run here: Vitest boots through Vite, whose Windows
-  realpath shim spawns a subprocess the sandbox denies. `verify-adaptation.mjs`
-  covers the same host surfaces in-process instead.
+  realpath shim spawns a subprocess the sandbox denies. The two harnesses below
+  cover the same host surfaces in-process instead.

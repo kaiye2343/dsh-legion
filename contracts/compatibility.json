@@ -143,9 +143,9 @@
     "ephemeralProfileAndStrategy": "supported",
     "journalContractAndPureReplay": "supported",
     "liveSettingsReconfiguration": "capability-detected-optional",
-    "settingsNamespaceRegistration": "unavailable-on-0.2.0-fail-closed",
+    "settingsNamespaceRegistration": "declared-by-loader-entry-id-on-0.2.0",
     "durableMutation": "unavailable-fail-closed",
-    "reason": "DSH 0.2.0-rc.2 replaced the runtime `SettingsProvider.register(namespace, schema)` seam with `SettingsForms`, which exposes only read/write surfaces (describe/update/replace/mutate) and declares a namespace through its Loader entry schema. A plugin can therefore no longer announce its own namespace at runtime, so the `legion` settings CARD is not served on 0.2.0; the seam now detects the missing member and reports it instead of throwing, and delegation is unaffected. Durable mutation remains fail-closed: DSH 0.2.0-rc.2 still provides no atomic run coordination Host service for it, and required out-of-repository legion/* events cannot enter its generated persisted-event vocabulary."
+    "reason": "DSH 0.2.0-rc.2 replaced the runtime `SettingsProvider.register(namespace, schema)` seam with `SettingsForms`, which derives a settings namespace as `entry.options.id` and takes its schema from that mount's exported `Config`. The package therefore serves the `legion` namespace from its bundle-patch Loader row (id `legion`), and the client card looks the form up by that same entry id. The legacy `register` path is retained only as a capability-detected fallback for 0.1.x Hosts and is skipped, with a diagnostic, when the member is absent. Durable mutation remains fail-closed: DSH 0.2.0-rc.2 still provides no atomic run coordination Host service for it, and required out-of-repository legion/* events cannot enter its generated persisted-event vocabulary."
   },
   "previousMinorCompatibility": [
     "config-v2-with-durable-fields-omitted",

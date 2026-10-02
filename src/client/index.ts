@@ -121,10 +121,14 @@ export const inject = ['slots', 'locale', 'configForms']
 
 /**
  * Host Loader entry id whose config carries the `legion` namespace.
+ *
  * DSH 0.2 addresses a settings form by Host entry id (`ctx.configForms.get`),
- * replacing the 0.1 bound `SettingsScope` that was keyed on the namespace.
+ * replacing the 0.1 bound `SettingsScope` that was keyed on the namespace. The
+ * Host derives the served namespace from this same id, so the bundle patch's
+ * settings row is named `legion` — id and namespace are one fact on 0.2, which
+ * is why {@link LEGION_NAMESPACE} is reused here rather than restated.
  */
-export const LEGION_HOST_ENTRY_ID = 'legion-settings'
+export const LEGION_HOST_ENTRY_ID = LEGION_NAMESPACE
 
 /**
  * Mount Legion's settings card.
