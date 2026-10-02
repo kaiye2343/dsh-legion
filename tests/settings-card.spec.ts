@@ -8,7 +8,7 @@ import { en } from '../src/client/locales.ts'
 import { materializeCurrentConfigWithDiagnostics } from '../src/config.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
-  IconChevronDownOutline14: () => null,
+  IconChevronDownOutlineMedium: () => null,
 }))
 
 function readyScope(section: LegionCardSection, base: LegionCardSection = {}) {

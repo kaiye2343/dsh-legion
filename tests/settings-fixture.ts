@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import SettingsForms, { type SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import SettingsForms, { type SettingsDescriptor, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
 
 /**
  * In-memory `ctx.settings` stand-in for the DSH 0.2.0 settings seam.
@@ -28,7 +28,10 @@ export class SettingsFixture {
     // it stays PENDING — and `ctx.get('settings')` stays undefined — unless both
     // are already provided. A test host that only mounts the provider would
     // otherwise hang here rather than fail informatively.
-    ctx.root.loader ??= { await: async () => undefined }
+    // SettingsForms awaits the profile Loader during construction; a unit-test
+    // root has no Loader, so it gets a settled stub. Only `await` is read, so the
+    // narrow cast stands in for the full Loader surface the type demands.
+    ctx.root.loader ??= { await: async () => undefined } as unknown as typeof ctx.root.loader
     if (ctx.get('profileContext') === undefined) ctx.provide('profileContext', { name: 'settings-fixture' })
     if (ctx.get('configEditor') === undefined) {
       ctx.provide('configEditor', {
@@ -75,6 +78,17 @@ export class SettingsFixture {
 }
 
 class MemorySettings extends SettingsForms {
+  /**
+   * Namespaces this fixture has been asked to serve, keyed by namespace.
+   *
+   * DSH 0.2's real `SettingsForms.describe()` derives its rows from Loader
+   * entries, which an in-memory double has none of — so it would always answer
+   * `[]` and every registration assertion would fail for the wrong reason. The
+   * fixture therefore tracks registrations itself and answers `describe()` from
+   * that, which is the surface `SettingsFixture.registrations` reads.
+   */
+  private readonly owned = new Map<string, { ns: SettingsNamespace; base: unknown; schema: unknown }>()
+
   constructor(ctx: Context, private readonly fixture: SettingsFixture) {
     super(ctx)
   }
@@ -82,6 +96,45 @@ class MemorySettings extends SettingsForms {
   /** 0.2 keeps form policy on the service; the fixture is always editable. */
   override get writable(): boolean {
     return true
+  }
+
+  /**
+   * The 0.1.x runtime registration seam, reimplemented so `registerSettingsNamespace`
+   * — which Legion keeps as a capability-detected fallback — has something to call.
+   * The real 0.2 service omits this member, and Legion is built to degrade when it
+   * is absent; this double offers it so the registration path stays under test.
+   */
+  register<Value>(
+    namespace: string,
+    schema: unknown,
+    options?: { base?: Value },
+  ): { getSnapshot(): { value: Value | undefined; user: unknown; base: unknown }; subscribe(l: () => void): () => void } {
+    this.owned.set(namespace, {
+      ns: namespace as SettingsNamespace,
+      base: options?.base,
+      schema,
+    })
+    const section = (): Value | undefined => this.fixture.load()[namespace] as Value | undefined
+    return {
+      getSnapshot: () => ({
+        value: section() ?? options?.base,
+        user: section(),
+        base: options?.base,
+      }),
+      subscribe: () => () => {},
+    }
+  }
+
+  /** Rows for every namespace this double was asked to serve. */
+  override describe(): SettingsDescriptor[] {
+    return [...this.owned.values()].map(entry => ({
+      ns: entry.ns,
+      autoGenerate: true,
+      schema: entry.schema,
+      value: this.fixture.load()[entry.ns],
+      revision: 0,
+      applies: 'live' as const,
+    }))
   }
 
   pushExternal(document: Record<string, unknown>): void {

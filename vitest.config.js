@@ -28,15 +28,21 @@ export default {
     alias: {
       '@deepseek-ai/dsh-api-gateway/client': installed('dsh-api-gateway/lib/types/client/index.js'),
       '@deepseek-ai/dsh-api-session-controller/client': installed('dsh-api-session-controller/lib/types/client/index.js'),
-      // DSH 0.2.0 flattened the client entries: each of these packages ships
-      // `lib/client.js`, and its `./client` export points there. The 0.1.x
-      // `lib/types/client/...` paths no longer contain emitted JS.
-      '@deepseek-ai/dsh-client-ui-chat/client': installed('dsh-client-ui-chat/lib/client.js'),
-      '@deepseek-ai/dsh-client-ui-conversation/client': installed('dsh-client-ui-conversation/lib/client.js'),
-      '@deepseek-ai/dsh-client-ui-renderer/client': installed('dsh-client-ui-renderer/lib/client.js'),
-      '@deepseek-ai/dsh-client-ui-renderer/src/client/bind.ts': officialClientSource('dsh-client-ui-renderer', 'ui-renderer', 'client/bind.ts', 'lib/client.js'),
-      '@deepseek-ai/dsh-client-ui-renderer/src/client/scoped-slots.tsx': officialClientSource('dsh-client-ui-renderer', 'ui-renderer', 'client/scoped-slots.tsx', 'lib/client.js'),
-      '@deepseek-ai/dsh-client-ui-session/client': installed('dsh-client-ui-session/lib/client.js'),
+      // Client-side aliases resolve to DSH SOURCE (`.ts`), which the published
+      // packages do not ship: they contain only `lib/`, and `lib/client.js` is a
+      // browser bundle whose first statement is `window.__ModuleLoader__.load`.
+      // Importing that under Node throws `window is not defined`.
+      //
+      // These therefore only resolve when a full DSH checkout is supplied via
+      // DSH_LEGION_DSH_TEST_SOURCE. Without it, the client specs that import
+      // `dsh-client-test-runtime` cannot be collected — a missing-prerequisite
+      // condition of this machine, not a Legion defect.
+      '@deepseek-ai/dsh-client-ui-chat/client': officialClientSource('dsh-client-ui-chat', 'ui-chat', 'client/contract/snapshot.ts', 'lib/types/client/contract/snapshot.js'),
+      '@deepseek-ai/dsh-client-ui-conversation/client': officialClientSource('dsh-client-ui-conversation', 'ui-conversation', 'client/contract/snapshot.ts', 'lib/types/client/contract/snapshot.js'),
+      '@deepseek-ai/dsh-client-ui-renderer/client': officialClientSource('dsh-client-ui-renderer', 'ui-renderer', 'client/index.ts'),
+      '@deepseek-ai/dsh-client-ui-renderer/src/client/bind.ts': officialClientSource('dsh-client-ui-renderer', 'ui-renderer', 'client/bind.ts'),
+      '@deepseek-ai/dsh-client-ui-renderer/src/client/scoped-slots.tsx': officialClientSource('dsh-client-ui-renderer', 'ui-renderer', 'client/scoped-slots.tsx'),
+      '@deepseek-ai/dsh-client-ui-session/client': officialClientSource('dsh-client-ui-session', 'ui-session', 'client/index.ts'),
       'react-dom/client': resolve(resolveWorkspaceInstalledPackage(ROOT, WORKSPACE_PACKAGES, 'react-dom'), 'client.js'),
       'react-dom': resolve(resolveWorkspaceInstalledPackage(ROOT, WORKSPACE_PACKAGES, 'react-dom'), 'index.js'),
       'use-sync-external-store/shim/with-selector': resolve(resolveWorkspaceInstalledPackage(ROOT, WORKSPACE_PACKAGES, 'use-sync-external-store'), 'shim/with-selector.js'),
